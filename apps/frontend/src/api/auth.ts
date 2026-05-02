@@ -16,6 +16,31 @@ export interface AuthResponse {
   email: string
 }
 
+const formatApiErrorMessage = (error: unknown, fallback: string): string => {
+  if (!axios.isAxiosError(error)) {
+    return fallback
+  }
+
+  if (!error.response) {
+    return 'Cannot reach API server. Please ensure backend is running on http://localhost:8000.'
+  }
+
+  const detail = error.response.data?.detail
+
+  if (typeof detail === 'string') {
+    return detail
+  }
+
+  if (Array.isArray(detail) && detail.length > 0) {
+    const firstDetail = detail[0]
+    if (firstDetail && typeof firstDetail.msg === 'string') {
+      return firstDetail.msg
+    }
+  }
+
+  return fallback
+}
+
 export const auth = {
   signup: async (data: SignUpRequest): Promise<AuthResponse> => {
     try {
@@ -25,11 +50,8 @@ export const auth = {
       })
       return response.data
     } catch (error) {
-      if (axios.isAxiosError(error)) {
-        const detail = error.response?.data?.detail
-        throw new Error(typeof detail === 'string' ? detail : 'Signup failed', { cause: error })
-      }
-      throw error
+      const message = formatApiErrorMessage(error, 'Signup failed')
+      throw new Error(message, { cause: error })
     }
   },
 
@@ -41,11 +63,8 @@ export const auth = {
       })
       return response.data
     } catch (error) {
-      if (axios.isAxiosError(error)) {
-        const detail = error.response?.data?.detail
-        throw new Error(typeof detail === 'string' ? detail : 'Login failed', { cause: error })
-      }
-      throw error
+      const message = formatApiErrorMessage(error, 'Login failed')
+      throw new Error(message, { cause: error })
     }
   },
 
