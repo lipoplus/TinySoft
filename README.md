@@ -28,13 +28,13 @@ This is a monorepo with:
 ### Prerequisites
 - Python 3.12+
 - Docker
-- k3d (Kubernetes in Docker)
-- kubectl
+- microk8s (single-node Kubernetes)
+- kubectl (or use `microk8s kubectl`)
 
 ### Quick Start
 
 ```bash
-# Start local K3s cluster with all services
+# Start microk8s cluster with all services
 make dev-up
 
 # Watch logs
@@ -47,7 +47,7 @@ make dev-test
 make dev-down
 ```
 
-The API will be available at `http://localhost:8080`.
+The API will be available after you set up a host entry for `voiceresumeapp.local` pointing to the microk8s service IP.
 
 ## Project Structure
 

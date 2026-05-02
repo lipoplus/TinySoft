@@ -2,22 +2,35 @@
 
 Manifests for deploying VoiceResume to Kubernetes.
 
-## Local Development (K3s via k3d)
+## Local Development (microk8s)
 
 ```bash
-# Create cluster with K3d
-k3d cluster create voiceresumeai --agents 1 --servers 1 -p "8080:80@loadbalancer"
+# Start microk8s
+microk8s start
+
+# Enable required services
+microk8s enable dns storage ingress
 
 # Apply manifests
-kubectl apply -f namespace.yaml
-kubectl apply -f voiceresumeapp-configmap.yaml
-kubectl apply -f voiceresumeapp-deployment.yaml
-kubectl apply -f voiceresumeapp-service.yaml
-kubectl apply -f voiceresumeapp-ingress.yaml
+microk8s kubectl apply -f voiceresumeapp-configmap.yaml
+microk8s kubectl apply -f voiceresumeapp-deployment.yaml
+microk8s kubectl apply -f voiceresumeapp-service.yaml
+microk8s kubectl apply -f voiceresumeapp-ingress.yaml
 
 # Check status
-kubectl get pods -n production
-kubectl logs -n production -l app=voiceresumeapp -f
+microk8s kubectl get pods -n production
+microk8s kubectl logs -n production -l app=voiceresumeapp -f
+
+# Get service IP and add to /etc/hosts
+microk8s kubectl get svc -n production
+# Then add: <IP> voiceresumeapp.local
+```
+
+Or simply use the Makefile:
+```bash
+make dev-up      # Start microk8s and deploy
+make dev-logs    # Watch logs
+make dev-down    # Stop microk8s
 ```
 
 ## Production (DigitalOcean DOKS)
