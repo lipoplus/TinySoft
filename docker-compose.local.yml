@@ -1,0 +1,95 @@
+version: '3.9'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: voiceresumeai-postgres
+    environment:
+      POSTGRES_USER: voiceresumeai
+      POSTGRES_PASSWORD: voiceresumeai
+      POSTGRES_DB: voiceresumeai
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U voiceresumeai"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - voiceresumeai
+
+  minio:
+    image: minio/minio:latest
+    container_name: voiceresumeai-minio
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - voiceresumeai
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: voiceresumeai-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - voiceresumeai
+
+  voiceresumeapp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    container_name: voiceresumeai-app
+    environment:
+      ENVIRONMENT: development
+      LOG_LEVEL: info
+      DATABASE_URL: postgresql://voiceresumeai:voiceresumeai@postgres:5432/voiceresumeai
+      JWT_SECRET: dev-secret-key-change-in-production
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-sk-dev-key}
+      S3_ENDPOINT: http://minio:9000
+      S3_BUCKET: voiceresumeai
+      S3_ACCESS_KEY: minioadmin
+      S3_SECRET_KEY: minioadmin
+      S3_REGION: us-east-1
+      SQL_ECHO: "false"
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./apps/voiceresumeapp:/app/apps/voiceresumeapp
+      - ./packages:/app/packages
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    command: uvicorn apps.voiceresumeapp.main:app --host 0.0.0.0 --port 8000 --reload
+    networks:
+      - voiceresumeai
+
+volumes:
+  postgres_data:
+  minio_data:
+
+networks:
+  voiceresumeai:
+    driver: bridge

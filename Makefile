@@ -1,19 +1,56 @@
-.PHONY: help dev-up dev-down dev-logs dev-build dev-test dev-lint clean
+.PHONY: help dev-up dev-down dev-logs dev-build dev-test dev-lint clean setup docker-up docker-down docker-logs docker-test
 
 K8S_NAMESPACE ?= production
 DOCKER_IMAGE ?= voiceresumeapp:latest
+COMPOSE_FILE ?= docker-compose.local.yml
 
 help:
-	@echo "VoiceResume Local Development (microk8s)"
+	@echo "VoiceResume Local Development"
 	@echo ""
-	@echo "Usage:"
+	@echo "QUICK START (Docker Compose - Recommended):"
+	@echo "  make setup        - Interactive setup (choose Docker Compose or K8s)"
+	@echo "  make docker-up    - Start services with Docker Compose"
+	@echo "  make docker-down  - Stop Docker Compose services"
+	@echo "  make docker-logs  - View Docker Compose logs"
+	@echo "  make docker-test  - Run tests in Docker"
+	@echo ""
+	@echo "KUBERNETES (microk8s):"
 	@echo "  make dev-up       - Start microk8s and apply manifests"
 	@echo "  make dev-down     - Stop microk8s"
-	@echo "  make dev-logs     - Tail application logs"
+	@echo "  make dev-logs     - Tail K8s application logs"
+	@echo ""
+	@echo "UTILITIES:"
 	@echo "  make dev-build    - Build Docker image locally"
-	@echo "  make dev-test     - Run tests"
 	@echo "  make dev-lint     - Lint code"
 	@echo "  make clean        - Clean up build artifacts"
+
+setup:
+	@bash scripts/setup-local-dev.sh
+
+docker-up:
+	docker compose -f $(COMPOSE_FILE) up -d
+	@echo "Services starting... waiting 5 seconds for health checks"
+	@sleep 5
+	@echo ""
+	@echo "✓ Services are starting!"
+	@echo "  API:     http://localhost:8000"
+	@echo "  Swagger: http://localhost:8000/docs"
+	@echo "  Minio:   http://localhost:9001"
+	@echo "  PgAdmin: http://localhost:5050"
+	@echo ""
+	@echo "Run 'make docker-logs' to watch logs"
+
+docker-down:
+	docker compose -f $(COMPOSE_FILE) down
+
+docker-logs:
+	docker compose -f $(COMPOSE_FILE) logs -f voiceresumeapp
+
+docker-test:
+	docker compose -f $(COMPOSE_FILE) exec voiceresumeapp pytest tests/ -v
+
+docker-shell:
+	docker compose -f $(COMPOSE_FILE) exec voiceresumeapp bash
 
 dev-up:
 	@echo "Starting microk8s..."
