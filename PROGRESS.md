@@ -1,49 +1,46 @@
 # VoiceResume Development Progress
 
-## Latest Update: CREA-15 Local Development Environment Setup
+## Latest Update: CREA-18 Docker to Podman Migration
 
 **Date:** 2026-05-02  
 **Status:** Complete  
-**What Changed:** Created comprehensive local development environment with Docker Compose + K8s options
+**What Changed:** Migrated container management from Docker to Podman for improved rootless/daemonless execution
 
 ### Changes Made
 
-#### 1. Documentation
-- **SETUP.md** — Comprehensive setup guide with two options (Docker Compose fast iteration, K8s production-like)
-- **DEV_ENVIRONMENT.md** — Quick reference guide for common workflows, troubleshooting, environment variables
-- **.env.local** — Local environment file template with all required variables documented
+#### 1. Makefile Updates
+- Replaced `docker compose` → `podman-compose` (all 5 compose commands)
+- Replaced `docker build` → `podman build` and `docker save` → `podman save`
+- Renamed `DOCKER_IMAGE` → `CONTAINER_IMAGE` variable
+- Updated help text and comments to reference Podman
 
-#### 2. Docker Compose Setup
-- **docker-compose.local.yml** — Complete local environment with:
-  - PostgreSQL 16 with persistent data
-  - Minio S3-compatible storage
-  - PgAdmin for database visualization
-  - FastAPI app with hot reload
+#### 2. Setup Script Updates (`scripts/setup-local-dev.sh`)
+- Changed Docker installation check → Podman check
+- Added podman-compose verification
+- Updated daemon/socket checks for rootless mode compatibility
+- Replaced all docker commands with podman equivalents
 
-#### 3. Automation
-- **scripts/setup-local-dev.sh** — Interactive setup script that:
-  - Checks for Docker/Docker Compose installation
-  - Offers choice between Docker Compose and K8s
-  - Applies database migrations automatically
-  - Shows service endpoints and next steps
+#### 3. Documentation Updates
+- **SETUP.md:** Updated all command examples, prerequisites, and troubleshooting for Podman
+- **DEV_ENVIRONMENT.md:** Updated all workflow examples to use Podman
+- **PROGRESS.md:** Documented the migration with Podman installation notes
 
-#### 4. Docker Improvements
-- Updated **Dockerfile** with multi-stage build:
-  - `builder` stage — dependencies compilation
-  - `development` stage — with reload support and dev tools (pytest, alembic)
-  - `production` stage — lean production image
+#### 4. Compatibility
+- ✅ Dockerfile: No changes needed (fully Podman-compatible)
+- ✅ docker-compose.yml: No changes needed (Podman uses same format)
+- ✅ All existing workflows work identically with Podman
 
-#### 5. Makefile Enhancements
-- Added `make setup` — interactive setup wizard
-- Added `make docker-up/down/logs/test/shell` — Docker Compose commands
-- Kept existing K8s targets (`make dev-up/down/logs`)
-- Added helpful usage documentation
+### Why Podman?
+- **Rootless by default:** Enhanced security (no daemon privilege escalation)
+- **Drop-in replacement:** Compatible with Docker CLI and compose files
+- **Daemonless:** Better resource efficiency and system integration
+- **Same developer experience:** Commands are virtually identical
 
 ### How Developers Use This
 
-**Option 1: Fast Iteration (Recommended)**
+**Option 1: Fast Iteration with Podman (Recommended)**
 ```bash
-make setup           # Choose Docker Compose
+make setup           # Choose Podman Compose
 make docker-up       # Services running in ~30s
 make docker-logs     # Watch changes
 make docker-test     # Run tests

@@ -12,28 +12,28 @@ echo -e "${YELLOW}VoiceResume Local Development Setup${NC}"
 echo "======================================"
 echo ""
 
-# Check if Docker is installed
-if ! command -v docker &> /dev/null; then
-    echo -e "${RED}❌ Docker is not installed${NC}"
-    echo "Please install Docker: https://docs.docker.com/get-docker/"
+# Check if Podman is installed
+if ! command -v podman &> /dev/null; then
+    echo -e "${RED}❌ Podman is not installed${NC}"
+    echo "Please install Podman: https://podman.io/getting-started/installation/"
     exit 1
 fi
 
-# Check if Docker compose is available
-if ! docker compose version &> /dev/null; then
-    echo -e "${RED}❌ Docker Compose is not installed${NC}"
-    echo "Please install Docker Compose: https://docs.docker.com/compose/install/"
+# Check if podman-compose is available
+if ! command -v podman-compose &> /dev/null; then
+    echo -e "${RED}❌ podman-compose is not installed${NC}"
+    echo "Please install podman-compose: https://github.com/containers/podman-compose"
     exit 1
 fi
 
-# Check if Docker daemon is running
-if ! docker ps &> /dev/null; then
-    echo -e "${RED}❌ Docker daemon is not running${NC}"
-    echo "Please start Docker and try again"
+# Check if Podman socket is accessible (for rootless mode)
+if ! podman ps &> /dev/null; then
+    echo -e "${RED}❌ Podman socket is not accessible${NC}"
+    echo "Please check your Podman installation and socket permissions"
     exit 1
 fi
 
-echo -e "${GREEN}✓ Docker and Docker Compose are installed${NC}"
+echo -e "${GREEN}✓ Podman and podman-compose are installed${NC}"
 echo ""
 
 # Check if .env.local exists

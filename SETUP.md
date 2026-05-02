@@ -2,8 +2,8 @@
 
 ## Two Options for Local Development
 
-### Option 1: Docker Compose (Recommended for Fast Iteration)
-**Speed:** Fast (compose up in ~30s) | **Closest to prod:** ⭐⭐⭐ | **Overhead:** Docker only
+### Option 1: Podman Compose (Recommended for Fast Iteration)
+**Speed:** Fast (compose up in ~30s) | **Closest to prod:** ⭐⭐⭐ | **Overhead:** Podman only
 
 Ideal for:
 - Rapid feature development
@@ -22,13 +22,13 @@ Ideal for:
 
 ---
 
-## Quick Start with Docker Compose (Recommended)
+## Quick Start with Podman Compose (Recommended)
 
 ### Prerequisites
 ```bash
-# Check Docker is installed and running
-docker --version
-docker compose version  # Should be v2.0+
+# Check Podman is installed and running
+podman --version
+podman-compose --version
 ```
 
 ### Setup
@@ -43,13 +43,13 @@ cp .env.example .env.local
 nano .env.local
 
 # 4. Start all services
-docker compose -f docker-compose.local.yml up -d
+podman-compose -f docker-compose.local.yml up -d
 
 # 5. Wait for services to be ready (20-30 seconds)
-docker compose -f docker-compose.local.yml logs -f
+podman-compose -f docker-compose.local.yml logs -f
 
 # 6. Apply database migrations
-docker compose -f docker-compose.local.yml exec voiceresumeapp alembic upgrade head
+podman-compose -f docker-compose.local.yml exec voiceresumeapp alembic upgrade head
 
 # 7. Test the API
 curl http://localhost:8000/health
@@ -64,19 +64,19 @@ curl http://localhost:8000/health
 ### Common Commands
 ```bash
 # View logs
-docker compose -f docker-compose.local.yml logs voiceresumeapp -f
+podman-compose -f docker-compose.local.yml logs voiceresumeapp -f
 
 # Run tests
-docker compose -f docker-compose.local.yml exec voiceresumeapp pytest tests/ -v
+podman-compose -f docker-compose.local.yml exec voiceresumeapp pytest tests/ -v
 
 # Stop services
-docker compose -f docker-compose.local.yml down
+podman-compose -f docker-compose.local.yml down
 
 # Stop and remove data (clean slate)
-docker compose -f docker-compose.local.yml down -v
+podman-compose -f docker-compose.local.yml down -v
 
 # View database
-docker compose -f docker-compose.local.yml exec postgres psql -U voiceresumeai -d voiceresumeai
+podman-compose -f docker-compose.local.yml exec postgres psql -U voiceresumeai -d voiceresumeai
 ```
 
 ### Developing with Hot Reload
@@ -88,6 +88,11 @@ docker compose -f docker-compose.local.yml exec postgres psql -U voiceresumeai -
 curl -X POST http://localhost:8000/auth/signup \
   -H "Content-Type: application/json" \
   -d '{"email":"test@example.com","password":"test123"}'
+
+# Run via make command (easier)
+make docker-up   # Start services
+make docker-logs # View logs
+make docker-down # Stop services
 ```
 
 ---
@@ -145,16 +150,22 @@ make clean
 
 ## Troubleshooting
 
-### Docker Compose Issues
+### Podman Compose Issues
 
-**Issue:** `docker: command not found`
-- **Solution:** Install Docker Desktop or Docker Engine: https://docs.docker.com/get-docker/
+**Issue:** `podman: command not found`
+- **Solution:** Install Podman: https://podman.io/getting-started/installation/
+
+**Issue:** `podman-compose: command not found`
+- **Solution:** Install podman-compose: https://github.com/containers/podman-compose
 
 **Issue:** Port 8000 already in use
 - **Solution:** Kill the process or change port in docker-compose.local.yml
 
 **Issue:** Database connection refused
-- **Solution:** Wait longer (databases take time to start). Check logs with `docker compose logs postgres`
+- **Solution:** Wait longer (databases take time to start). Check logs with `podman-compose logs postgres`
+
+**Issue:** Podman socket permission denied
+- **Solution:** Check rootless mode setup or run with appropriate permissions
 
 ### Kubernetes Issues
 
@@ -171,10 +182,10 @@ make clean
 
 ## Development Workflow
 
-### With Docker Compose
+### With Podman Compose
 ```bash
 # Terminal 1: Watch logs
-docker compose -f docker-compose.local.yml logs -f voiceresumeapp
+podman-compose -f docker-compose.local.yml logs -f voiceresumeapp
 
 # Terminal 2: Make changes, edit in apps/voiceresumeapp/
 # Changes reload automatically
@@ -185,8 +196,8 @@ curl http://localhost:8000/health
 
 ### Running Tests
 ```bash
-# Docker Compose
-docker compose -f docker-compose.local.yml exec voiceresumeapp pytest tests/ -v
+# Podman Compose
+podman-compose -f docker-compose.local.yml exec voiceresumeapp pytest tests/ -v
 
 # Or locally (requires Python 3.12+)
 pip install -r apps/voiceresumeapp/requirements.txt
@@ -196,21 +207,21 @@ pytest apps/voiceresumeapp/tests/ -v
 ### Database Migrations
 ```bash
 # Create a new migration
-docker compose -f docker-compose.local.yml exec voiceresumeapp alembic revision --autogenerate -m "description"
+podman-compose -f docker-compose.local.yml exec voiceresumeapp alembic revision --autogenerate -m "description"
 
 # Apply migrations
-docker compose -f docker-compose.local.yml exec voiceresumeapp alembic upgrade head
+podman-compose -f docker-compose.local.yml exec voiceresumeapp alembic upgrade head
 
 # Rollback
-docker compose -f docker-compose.local.yml exec voiceresumeapp alembic downgrade -1
+podman-compose -f docker-compose.local.yml exec voiceresumeapp alembic downgrade -1
 ```
 
 ---
 
 ## System Requirements
 
-### Docker Compose
-- **OS:** macOS, Linux, or Windows (with WSL2)
+### Podman Compose
+- **OS:** Linux, or macOS (with Podman Machine), or Windows (with WSL2)
 - **RAM:** 2GB minimum (4GB recommended)
 - **Disk:** 5GB for images and volumes
 
@@ -253,7 +264,7 @@ OPENAI_API_KEY=sk-your-actual-key
 
 ## Getting Help
 
-- Check logs: `docker compose logs <service-name>`
+- Check logs: `podman-compose logs <service-name>`
 - Database issues: Use PgAdmin at http://localhost:5050
 - S3/Minio issues: Use console at http://localhost:9001
 - API docs: http://localhost:8000/docs
@@ -262,7 +273,7 @@ OPENAI_API_KEY=sk-your-actual-key
 
 ## Summary
 
-**For 90% of development:** Use Docker Compose (it's faster and easier).
+**For 90% of development:** Use Podman Compose (it's faster and easier).
 
 **When you need:** Production simulation, K8s testing, or deployment validation → Use microk8s.
 

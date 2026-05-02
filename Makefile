@@ -1,18 +1,18 @@
 .PHONY: help setup dev-up dev-down dev-reset dev-logs dev-logs-all dev-validate dev-shell dev-psql dev-build dev-test dev-lint clean docker-up docker-down docker-logs docker-test docker-shell
 
 K8S_NAMESPACE ?= production
-DOCKER_IMAGE ?= voiceresumeapp:latest
+CONTAINER_IMAGE ?= voiceresumeapp:latest
 COMPOSE_FILE ?= docker-compose.local.yml
 
 help:
 	@echo "VoiceResume Local Development"
 	@echo ""
-	@echo "QUICK START (Docker Compose - Recommended):"
-	@echo "  make setup           - Interactive setup (choose Docker Compose or K8s)"
-	@echo "  make docker-up       - Start services with Docker Compose"
-	@echo "  make docker-down     - Stop Docker Compose services"
-	@echo "  make docker-logs     - View Docker Compose logs"
-	@echo "  make docker-test     - Run tests in Docker"
+	@echo "QUICK START (Podman Compose - Recommended):"
+	@echo "  make setup           - Interactive setup (choose Podman Compose or K8s)"
+	@echo "  make docker-up       - Start services with Podman Compose"
+	@echo "  make docker-down     - Stop Podman Compose services"
+	@echo "  make docker-logs     - View Podman Compose logs"
+	@echo "  make docker-test     - Run tests in Podman"
 	@echo ""
 	@echo "KUBERNETES (microk8s - Option 2):"
 	@echo "  make dev-up          - Start K8s cluster with all services"
@@ -34,7 +34,7 @@ setup:
 	@bash scripts/setup-local-dev.sh
 
 docker-up:
-	docker compose -f $(COMPOSE_FILE) up -d
+	podman-compose -f $(COMPOSE_FILE) up -d
 	@echo "Services starting... waiting 5 seconds for health checks"
 	@sleep 5
 	@echo ""
@@ -47,16 +47,16 @@ docker-up:
 	@echo "Run 'make docker-logs' to watch logs"
 
 docker-down:
-	docker compose -f $(COMPOSE_FILE) down
+	podman-compose -f $(COMPOSE_FILE) down
 
 docker-logs:
-	docker compose -f $(COMPOSE_FILE) logs -f voiceresumeapp
+	podman-compose -f $(COMPOSE_FILE) logs -f voiceresumeapp
 
 docker-test:
-	docker compose -f $(COMPOSE_FILE) exec voiceresumeapp pytest tests/ -v
+	podman-compose -f $(COMPOSE_FILE) exec voiceresumeapp pytest tests/ -v
 
 docker-shell:
-	docker compose -f $(COMPOSE_FILE) exec voiceresumeapp bash
+	podman-compose -f $(COMPOSE_FILE) exec voiceresumeapp bash
 
 dev-up:
 	@echo "Starting microk8s..."
@@ -68,11 +68,11 @@ dev-up:
 	@echo "Enabling required services..."
 	microk8s enable dns storage ingress || true
 
-	@echo "Building Docker image..."
-	docker build -t $(DOCKER_IMAGE) -t $(DOCKER_IMAGE):dev .
+	@echo "Building container image..."
+	podman build -t $(CONTAINER_IMAGE) -t $(CONTAINER_IMAGE):dev .
 
 	@echo "Loading image into microk8s..."
-	microk8s ctr image import <(docker save $(DOCKER_IMAGE)) || true
+	microk8s ctr image import <(podman save $(CONTAINER_IMAGE)) || true
 
 	@echo "Creating namespace..."
 	microk8s kubectl create namespace $(K8S_NAMESPACE) || true
@@ -154,7 +154,7 @@ dev-psql:
 	  -- psql -h postgres-svc -U voiceresumeai -d voiceresumeai
 
 dev-build:
-	docker build -t $(DOCKER_IMAGE) .
+	podman build -t $(CONTAINER_IMAGE) .
 
 dev-test:
 	pip install -r apps/voiceresumeapp/requirements.txt

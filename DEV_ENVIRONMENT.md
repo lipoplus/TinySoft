@@ -6,7 +6,7 @@
 # 1. Clone repo and cd into it
 cd voiceresumeai
 
-# 2. Run interactive setup (pick Docker Compose)
+# 2. Run interactive setup (pick Podman Compose)
 make setup
 
 # 3. That's it! Your environment is ready.
@@ -44,7 +44,7 @@ make docker-logs
 make docker-test
 
 # Or run specific test
-docker compose -f docker-compose.local.yml exec voiceresumeapp \
+podman-compose -f docker-compose.local.yml exec voiceresumeapp \
   pytest tests/test_auth.py::test_signup -v
 ```
 
@@ -57,7 +57,7 @@ docker compose -f docker-compose.local.yml exec voiceresumeapp \
 # Add server: host=postgres, user=voiceresumeai, password=voiceresumeai
 
 # Or use psql directly
-docker compose -f docker-compose.local.yml exec postgres \
+podman-compose -f docker-compose.local.yml exec postgres \
   psql -U voiceresumeai -d voiceresumeai
 ```
 
@@ -74,15 +74,15 @@ docker compose -f docker-compose.local.yml exec postgres \
 
 ```bash
 # Create new migration
-docker compose -f docker-compose.local.yml exec voiceresumeapp \
+podman-compose -f docker-compose.local.yml exec voiceresumeapp \
   alembic revision --autogenerate -m "add column"
 
 # Apply migrations
-docker compose -f docker-compose.local.yml exec voiceresumeapp \
+podman-compose -f docker-compose.local.yml exec voiceresumeapp \
   alembic upgrade head
 
 # Rollback one
-docker compose -f docker-compose.local.yml exec voiceresumeapp \
+podman-compose -f docker-compose.local.yml exec voiceresumeapp \
   alembic downgrade -1
 ```
 
@@ -91,7 +91,7 @@ docker compose -f docker-compose.local.yml exec voiceresumeapp \
 ```bash
 # Stop all services and remove data
 make docker-down
-docker compose -f docker-compose.local.yml down -v
+podman-compose -f docker-compose.local.yml down -v
 
 # Then restart
 make docker-up
@@ -114,27 +114,27 @@ make docker-down && make docker-up
 ### Database Connection Failed
 ```bash
 # Wait longer (services take time to start)
-docker compose -f docker-compose.local.yml logs postgres
+podman-compose -f docker-compose.local.yml logs postgres
 
 # If still failing, check postgres is healthy
-docker compose -f docker-compose.local.yml ps
+podman-compose -f docker-compose.local.yml ps
 ```
 
 ### Python Import Errors
 ```bash
 # Make sure you have the right dependencies
-docker compose -f docker-compose.local.yml exec voiceresumeapp \
+podman-compose -f docker-compose.local.yml exec voiceresumeapp \
   pip install -r requirements.txt
 
 # Or rebuild the image
-docker compose -f docker-compose.local.yml build --no-cache voiceresumeapp
+podman-compose -f docker-compose.local.yml build --no-cache voiceresumeapp
 ```
 
 ### Stuck Containers
 ```bash
 # Force remove everything and start fresh
-docker compose -f docker-compose.local.yml down -v
-docker compose -f docker-compose.local.yml up -d
+podman-compose -f docker-compose.local.yml down -v
+podman-compose -f docker-compose.local.yml up -d
 ```
 
 ---
@@ -188,7 +188,7 @@ Optional:
 
 ## Development Checklist
 
-- [ ] Docker and Docker Compose installed
+- [ ] Podman and podman-compose installed
 - [ ] `.env.local` created (with optional OPENAI_API_KEY)
 - [ ] Services running (`make docker-up`)
 - [ ] API responding (`curl http://localhost:8000/health`)
