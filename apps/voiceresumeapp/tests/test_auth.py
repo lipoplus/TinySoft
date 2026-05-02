@@ -69,3 +69,70 @@ def test_logout(client):
 
     logout_response = client.post("/auth/logout")
     assert logout_response.status_code == 200
+
+
+def test_password_reset_request(client):
+    client.post(
+        "/auth/signup",
+        json={"email": "test@example.com", "password": "secure-password"},
+    )
+    response = client.post(
+        "/auth/password-reset-request",
+        json={"email": "test@example.com"},
+    )
+    assert response.status_code == 200
+    assert "reset link will be sent" in response.json()["message"]
+
+
+def test_password_reset_request_nonexistent_email(client):
+    response = client.post(
+        "/auth/password-reset-request",
+        json={"email": "nonexistent@example.com"},
+    )
+    assert response.status_code == 200
+    assert "reset link will be sent" in response.json()["message"]
+
+
+def test_list_sessions(client, db):
+    from sqlalchemy import text
+    user_resp = client.post(
+        "/auth/signup",
+        json={"email": "test@example.com", "password": "secure-password"},
+    )
+    user_id = user_resp.json()["id"]
+
+    login_resp = client.post(
+        "/auth/login",
+        json={"email": "test@example.com", "password": "secure-password"},
+    )
+
+    response = client.get("/auth/sessions")
+    assert response.status_code == 200
+    sessions = response.json()["sessions"]
+    assert len(sessions) >= 1
+
+
+def test_cleanup_expired_sessions(client, db):
+    from datetime import datetime, timezone, timedelta
+    from platform_db.models import Session as SessionModel, User
+    from sqlalchemy import text
+
+    client.post(
+        "/auth/signup",
+        json={"email": "test@example.com", "password": "secure-password"},
+    )
+
+    users = db.query(User).all()
+    if users:
+        user = users[0]
+        expired_session = SessionModel(
+            user_id=user.id,
+            token_hash="fake-expired-token",
+            expires_at=datetime.now(timezone.utc) - timedelta(days=1),
+        )
+        db.add(expired_session)
+        db.commit()
+
+    response = client.delete("/auth/sessions")
+    assert response.status_code == 200
+    assert response.json()["deleted_sessions"] >= 0

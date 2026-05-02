@@ -34,3 +34,11 @@ def verify_token(token: str, secret_key: str) -> dict | None:
 
 def hash_token(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
+
+
+def generate_reset_token() -> str:
+    return os.urandom(32).hex()
+
+
+def get_reset_token_expiry() -> datetime:
+    return datetime.now(timezone.utc) + timedelta(hours=1)
