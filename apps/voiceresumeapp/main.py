@@ -15,6 +15,7 @@ from fastapi import (
     Response,
     UploadFile,
 )
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -114,12 +115,29 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+cors_origins = os.getenv(
+    "CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000"
+)
+allowed_origins = [origin.strip() for origin in cors_origins.split(",") if origin.strip()]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 SECRET_KEY = os.getenv("JWT_SECRET", "dev-secret-key-change-in-production")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 openai_client = openai.OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 
 ALLOWED_AUDIO_FORMATS = {"audio/mpeg", "audio/wav", "audio/webm", "audio/ogg"}
 MAX_FILE_SIZE = 25 * 1024 * 1024
+
+
+def normalize_email(email: str) -> str:
+    return email.strip().lower()
 
 
 def get_current_user(
@@ -159,12 +177,14 @@ async def health(db: Session = Depends(get_db)):
 
 @app.post("/auth/signup")
 async def signup(req: SignUpRequest, db: Session = Depends(get_db)):
-    existing_user = db.query(User).filter(User.email == req.email).first()
+    normalized_email = normalize_email(req.email)
+
+    existing_user = db.query(User).filter(User.email == normalized_email).first()
     if existing_user:
         raise HTTPException(status_code=400, detail="Email already registered")
 
     user = User(
-        email=req.email,
+        email=normalized_email,
         password_hash=hash_password(req.password),
     )
     db.add(user)
@@ -176,7 +196,9 @@ async def signup(req: SignUpRequest, db: Session = Depends(get_db)):
 
 @app.post("/auth/login")
 async def login(req: LoginRequest, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == req.email).first()
+    normalized_email = normalize_email(req.email)
+
+    user = db.query(User).filter(User.email == normalized_email).first()
     if not user or not verify_password(req.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
@@ -203,7 +225,8 @@ async def logout(response: Response):
 async def request_password_reset(req: PasswordResetRequest, db: Session = Depends(get_db)):
     import asyncio
 
-    user = db.query(User).filter(User.email == req.email).first()
+    normalized_email = normalize_email(req.email)
+    user = db.query(User).filter(User.email == normalized_email).first()
     if not user:
         return {"message": "If email exists, a reset link will be sent"}
 

@@ -1,4 +1,5 @@
 import client from './client'
+import axios from 'axios'
 
 export interface SignUpRequest {
   email: string
@@ -11,20 +12,41 @@ export interface LoginRequest {
 }
 
 export interface AuthResponse {
-  user_id: string
+  id: string
   email: string
-  session_token: string
 }
 
 export const auth = {
   signup: async (data: SignUpRequest): Promise<AuthResponse> => {
-    const response = await client.post('/auth/signup', data)
-    return response.data
+    try {
+      const response = await client.post('/auth/signup', {
+        email: data.email.trim().toLowerCase(),
+        password: data.password,
+      })
+      return response.data
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        const detail = error.response?.data?.detail
+        throw new Error(typeof detail === 'string' ? detail : 'Signup failed')
+      }
+      throw error
+    }
   },
 
   login: async (data: LoginRequest): Promise<AuthResponse> => {
-    const response = await client.post('/auth/login', data)
-    return response.data
+    try {
+      const response = await client.post('/auth/login', {
+        email: data.email.trim().toLowerCase(),
+        password: data.password,
+      })
+      return response.data
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        const detail = error.response?.data?.detail
+        throw new Error(typeof detail === 'string' ? detail : 'Login failed')
+      }
+      throw error
+    }
   },
 
   logout: async (): Promise<void> => {

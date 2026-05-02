@@ -8,12 +8,11 @@ interface AuthProviderProps {
 }
 
 function initializeAuth() {
-  const token = localStorage.getItem('session_token')
   const storedUserId = localStorage.getItem('user_id')
   const storedEmail = localStorage.getItem('email')
 
   return {
-    isAuthenticated: Boolean(token && storedUserId && storedEmail),
+    isAuthenticated: Boolean(storedUserId && storedEmail),
     userId: storedUserId,
     email: storedEmail,
   }
@@ -32,11 +31,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
     setError(null)
     try {
       const response = await auth.login({ email: emailInput, password: passwordInput })
-      localStorage.setItem('session_token', response.session_token)
-      localStorage.setItem('user_id', response.user_id)
+      localStorage.setItem('user_id', response.id)
       localStorage.setItem('email', response.email)
       setIsAuthenticated(true)
-      setUserId(response.user_id)
+      setUserId(response.id)
       setEmail(response.email)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Login failed'
@@ -51,13 +49,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
     setIsLoading(true)
     setError(null)
     try {
-      const response = await auth.signup({ email: emailInput, password: passwordInput })
-      localStorage.setItem('session_token', response.session_token)
-      localStorage.setItem('user_id', response.user_id)
-      localStorage.setItem('email', response.email)
+      await auth.signup({ email: emailInput, password: passwordInput })
+
+      const loginResponse = await auth.login({ email: emailInput, password: passwordInput })
+      localStorage.setItem('user_id', loginResponse.id)
+      localStorage.setItem('email', loginResponse.email)
       setIsAuthenticated(true)
-      setUserId(response.user_id)
-      setEmail(response.email)
+      setUserId(loginResponse.id)
+      setEmail(loginResponse.email)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Signup failed'
       setError(message)
@@ -74,7 +73,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
     } catch (err) {
       console.error('Logout error:', err)
     } finally {
-      localStorage.removeItem('session_token')
       localStorage.removeItem('user_id')
       localStorage.removeItem('email')
       setIsAuthenticated(false)
