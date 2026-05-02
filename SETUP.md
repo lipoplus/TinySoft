@@ -90,9 +90,9 @@ curl -X POST http://localhost:8000/auth/signup \
   -d '{"email":"test@example.com","password":"test123"}'
 
 # Run via make command (easier)
-make docker-up   # Start services
-make docker-logs # View logs
-make docker-down # Stop services
+make podman-up   # Start services
+make podman-logs # View logs
+make podman-down # Stop services
 ```
 
 ---
@@ -176,7 +176,7 @@ make clean
 - **Solution:** Check `microk8s kubectl get pods -n production` and `microk8s kubectl describe pod <pod-name> -n production`
 
 **Issue:** Image pull errors
-- **Solution:** Ensure Docker image was built: `make dev-build`
+- **Solution:** Ensure the Podman image was built: `make dev-build`
 
 ---
 
@@ -242,7 +242,7 @@ cp .env.example .env.local
 
 **Key variables:**
 - `OPENAI_API_KEY` — Required for transcription and resume generation
-- `DATABASE_URL` — Automatically set by docker-compose
+- `DATABASE_URL` — Automatically set by the compose stack
 - `S3_*` — Automatically set to Minio defaults
 
 To use your own OpenAI key:
@@ -257,7 +257,7 @@ OPENAI_API_KEY=sk-your-actual-key
 
 1. **Read the API docs:** http://localhost:8000/docs (Swagger UI, requires services running)
 2. **Explore the codebase:** Start with `apps/voiceresumeapp/main.py`
-3. **Run tests:** `make dev-test` or use docker-compose commands
+3. **Run tests:** `make dev-test` or use Podman Compose commands
 4. **Create a feature branch** for your work
 
 ---

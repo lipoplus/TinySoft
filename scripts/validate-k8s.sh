@@ -48,7 +48,7 @@ check_service() {
 echo -e "${YELLOW}Prerequisites:${NC}"
 check_command "microk8s installed" "which microk8s"
 check_command "kubectl installed" "which kubectl"
-check_command "docker installed" "which docker"
+check_command "podman installed" "which podman"
 
 echo ""
 echo -e "${YELLOW}microk8s Status:${NC}"

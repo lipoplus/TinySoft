@@ -1,18 +1,19 @@
-.PHONY: help setup dev-up dev-down dev-reset dev-logs dev-logs-all dev-validate dev-shell dev-psql dev-build dev-test dev-lint clean docker-up docker-down docker-logs docker-test docker-shell
+.PHONY: help setup dev-up dev-down dev-reset dev-logs dev-logs-all dev-validate dev-shell dev-psql dev-build dev-test dev-lint clean podman-up podman-down podman-logs podman-test podman-shell docker-up docker-down docker-logs docker-test docker-shell
 
 K8S_NAMESPACE ?= production
 CONTAINER_IMAGE ?= voiceresumeapp:latest
 COMPOSE_FILE ?= docker-compose.local.yml
+PODMAN_COMPOSE ?= $(shell if command -v podman >/dev/null 2>&1 && podman compose version >/dev/null 2>&1; then printf 'podman compose'; elif command -v podman-compose >/dev/null 2>&1; then printf 'podman-compose'; else printf 'podman compose'; fi)
 
 help:
 	@echo "VoiceResume Local Development"
 	@echo ""
 	@echo "QUICK START (Podman Compose - Recommended):"
 	@echo "  make setup           - Interactive setup (choose Podman Compose or K8s)"
-	@echo "  make docker-up       - Start services with Podman Compose"
-	@echo "  make docker-down     - Stop Podman Compose services"
-	@echo "  make docker-logs     - View Podman Compose logs"
-	@echo "  make docker-test     - Run tests in Podman"
+	@echo "  make podman-up       - Start services with Podman Compose"
+	@echo "  make podman-down     - Stop Podman Compose services"
+	@echo "  make podman-logs     - View Podman Compose logs"
+	@echo "  make podman-test     - Run tests in Podman"
 	@echo ""
 	@echo "KUBERNETES (microk8s - Option 2):"
 	@echo "  make dev-up          - Start K8s cluster with all services"
@@ -25,16 +26,23 @@ help:
 	@echo "  make dev-psql        - Connect to PostgreSQL"
 	@echo ""
 	@echo "UTILITIES:"
-	@echo "  make dev-build       - Build Docker image locally"
+	@echo "  make dev-build       - Build the local OCI image with Podman"
 	@echo "  make dev-test        - Run tests"
 	@echo "  make dev-lint        - Lint code"
 	@echo "  make clean           - Clean up build artifacts"
+	@echo ""
+	@echo "COMPATIBILITY ALIASES:"
+	@echo "  make docker-up       - Alias for make podman-up"
+	@echo "  make docker-down     - Alias for make podman-down"
+	@echo "  make docker-logs     - Alias for make podman-logs"
+	@echo "  make docker-test     - Alias for make podman-test"
+	@echo "  make docker-shell    - Alias for make podman-shell"
 
 setup:
 	@bash scripts/setup-local-dev.sh
 
-docker-up:
-	podman-compose -f $(COMPOSE_FILE) up -d
+podman-up:
+	$(PODMAN_COMPOSE) -f $(COMPOSE_FILE) up -d
 	@echo "Services starting... waiting 5 seconds for health checks"
 	@sleep 5
 	@echo ""
@@ -44,19 +52,29 @@ docker-up:
 	@echo "  Minio:   http://localhost:9001"
 	@echo "  PgAdmin: http://localhost:5050"
 	@echo ""
-	@echo "Run 'make docker-logs' to watch logs"
+	@echo "Run 'make podman-logs' to watch logs"
 
-docker-down:
-	podman-compose -f $(COMPOSE_FILE) down
+podman-down:
+	$(PODMAN_COMPOSE) -f $(COMPOSE_FILE) down
 
-docker-logs:
-	podman-compose -f $(COMPOSE_FILE) logs -f voiceresumeapp
+podman-logs:
+	$(PODMAN_COMPOSE) -f $(COMPOSE_FILE) logs -f voiceresumeapp
 
-docker-test:
-	podman-compose -f $(COMPOSE_FILE) exec voiceresumeapp pytest tests/ -v
+podman-test:
+	$(PODMAN_COMPOSE) -f $(COMPOSE_FILE) exec voiceresumeapp pytest tests/ -v
 
-docker-shell:
-	podman-compose -f $(COMPOSE_FILE) exec voiceresumeapp bash
+podman-shell:
+	$(PODMAN_COMPOSE) -f $(COMPOSE_FILE) exec voiceresumeapp bash
+
+docker-up: podman-up
+
+docker-down: podman-down
+
+docker-logs: podman-logs
+
+docker-test: podman-test
+
+docker-shell: podman-shell
 
 dev-up:
 	@echo "Starting microk8s..."

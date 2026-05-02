@@ -41,11 +41,11 @@ make dev-down
 microk8s start
 microk8s enable dns storage ingress
 
-# 2. Build local Docker image
-docker build -t voiceresumeapp:latest .
+# 2. Build local Podman image
+podman build -t voiceresumeapp:latest .
 
 # 3. Load image into microk8s
-microk8s ctr image import <(docker save voiceresumeapp:latest)
+microk8s ctr image import <(podman save voiceresumeapp:latest)
 
 # 4. Create namespace
 microk8s kubectl create namespace production
@@ -149,9 +149,9 @@ kubectl create secret generic voiceresumeapp-secrets \
   --from-literal=DB_PASSWORD=<strong-random-password> \
   -n production
 
-# 3. Push Docker image to GHCR
-docker tag voiceresumeapp:latest ghcr.io/voiceresumeai/voiceresumeapp:<version>
-docker push ghcr.io/voiceresumeai/voiceresumeapp:<version>
+# 3. Push image to GHCR with Podman
+podman tag voiceresumeapp:latest ghcr.io/voiceresumeai/voiceresumeapp:<version>
+podman push ghcr.io/voiceresumeai/voiceresumeapp:<version>
 
 # 4. Update deployment image reference in voiceresumeapp-deployment.yaml
 # Change: imagePullPolicy: Never → Always
@@ -186,8 +186,8 @@ microk8s kubectl top nodes
 ### Image pull failed
 ```bash
 # For local dev: ensure image is loaded
-docker build -t voiceresumeapp:latest .
-microk8s ctr image import <(docker save voiceresumeapp:latest)
+podman build -t voiceresumeapp:latest .
+microk8s ctr image import <(podman save voiceresumeapp:latest)
 
 # For DOKS: ensure image is pushed to GHCR and imagePullPolicy is set
 ```

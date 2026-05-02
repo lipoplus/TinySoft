@@ -2,6 +2,8 @@
 
 set -e
 
+COMPOSE_CMD=()
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -19,10 +21,14 @@ if ! command -v podman &> /dev/null; then
     exit 1
 fi
 
-# Check if podman-compose is available
-if ! command -v podman-compose &> /dev/null; then
-    echo -e "${RED}❌ podman-compose is not installed${NC}"
-    echo "Please install podman-compose: https://github.com/containers/podman-compose"
+# Prefer the integrated `podman compose` plugin, but keep podman-compose for compatibility.
+if podman compose version &> /dev/null; then
+    COMPOSE_CMD=(podman compose)
+elif command -v podman-compose &> /dev/null; then
+    COMPOSE_CMD=(podman-compose)
+else
+    echo -e "${RED}❌ No Podman Compose command was found${NC}"
+    echo "Install the Podman compose plugin or podman-compose: https://podman.io/getting-started/installation/"
     exit 1
 fi
 
@@ -33,7 +39,7 @@ if ! podman ps &> /dev/null; then
     exit 1
 fi
 
-echo -e "${GREEN}✓ Podman and podman-compose are installed${NC}"
+echo -e "${GREEN}✓ Podman and Podman Compose are installed${NC}"
 echo ""
 
 # Check if .env.local exists
@@ -49,26 +55,26 @@ fi
 
 # Ask user which setup option they want
 echo -e "${YELLOW}Select development environment:${NC}"
-echo "1) Docker Compose (fast, recommended for development)"
+echo "1) Podman Compose (fast, recommended for development)"
 echo "2) Kubernetes with microk8s (production-like, slower)"
 read -p "Enter choice (1 or 2): " choice
 
 case $choice in
     1)
         echo ""
-        echo -e "${YELLOW}Starting Docker Compose environment...${NC}"
-        docker compose -f docker-compose.local.yml up -d
+        echo -e "${YELLOW}Starting Podman Compose environment...${NC}"
+        "${COMPOSE_CMD[@]}" -f docker-compose.local.yml up -d
 
         echo ""
         echo -e "${YELLOW}Waiting for services to be ready...${NC}"
         sleep 5
 
         # Check if services are healthy
-        if docker compose -f docker-compose.local.yml ps | grep -q "healthy\|running"; then
+        if "${COMPOSE_CMD[@]}" -f docker-compose.local.yml ps | grep -q "healthy\|running"; then
             echo -e "${GREEN}✓ Services are starting${NC}"
             echo ""
             echo -e "${YELLOW}Applying database migrations...${NC}"
-            docker compose -f docker-compose.local.yml exec -T voiceresumeapp alembic upgrade head || true
+            "${COMPOSE_CMD[@]}" -f docker-compose.local.yml exec -T voiceresumeapp alembic upgrade head || true
             echo ""
             echo -e "${GREEN}✓ Setup complete!${NC}"
             echo ""
@@ -80,12 +86,12 @@ case $choice in
             echo "  🖥️  PgAdmin:    http://localhost:5050 (admin@admin.com/admin)"
             echo ""
             echo "Next steps:"
-            echo "  1. View logs:  docker compose -f docker-compose.local.yml logs -f"
-            echo "  2. Run tests:  docker compose -f docker-compose.local.yml exec voiceresumeapp pytest tests/ -v"
-            echo "  3. Stop:       docker compose -f docker-compose.local.yml down"
+            echo "  1. View logs:  make podman-logs"
+            echo "  2. Run tests:  make podman-test"
+            echo "  3. Stop:       make podman-down"
         else
             echo -e "${RED}✗ Services failed to start${NC}"
-            echo "Check logs: docker compose -f docker-compose.local.yml logs"
+            echo "Check logs: ${COMPOSE_CMD[*]} -f docker-compose.local.yml logs"
             exit 1
         fi
         ;;

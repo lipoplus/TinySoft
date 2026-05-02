@@ -11,7 +11,7 @@ Use Kubernetes when you need to:
 - Validate Kubernetes-specific features
 - Practice production deployment procedures
 
-**Speed**: ~2-3 minutes startup (vs 30 seconds for Docker Compose)
+**Speed**: ~2-3 minutes startup (vs 30 seconds for Podman Compose)
 
 ## Prerequisites
 
@@ -46,7 +46,7 @@ make setup
 ```
 
 The setup will:
-1. Build Docker image
+1. Build a local Podman image
 2. Start microk8s cluster
 3. Enable required services (DNS, storage, ingress)
 4. Create namespace and secrets
@@ -208,8 +208,8 @@ make dev-psql
 # (This is set in the deployment manifests)
 
 # Rebuild and reload image
-docker build -t voiceresumeapp:latest .
-microk8s ctr image import <(docker save voiceresumeapp:latest)
+podman build -t voiceresumeapp:latest .
+microk8s ctr image import <(podman save voiceresumeapp:latest)
 
 # Restart pods to pick up new image
 microk8s kubectl delete pods -n production -l app=voiceresumeapp

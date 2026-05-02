@@ -15,7 +15,7 @@ This is a monorepo with:
 - **Language:** Python 3.12
 - **Framework:** FastAPI
 - **Database:** PostgreSQL (shared cluster, isolated DB per app)
-- **Container:** Docker
+- **Container Runtime:** Podman for local development
 - **Orchestration:** Kubernetes (K3s for dev, DOKS for production)
 - **CI/CD:** GitHub Actions
 - **Storage:** S3-compatible (Minio for dev, Wasabi for prod)
@@ -27,27 +27,27 @@ This is a monorepo with:
 
 ### Prerequisites
 - Python 3.12+
-- Docker
+- Podman with `podman compose` or `podman-compose`
 - microk8s (single-node Kubernetes)
 - kubectl (or use `microk8s kubectl`)
 
 ### Quick Start
 
 ```bash
-# Start microk8s cluster with all services
-make dev-up
+# Start the local stack with Podman Compose
+make podman-up
 
 # Watch logs
-make dev-logs
+make podman-logs
 
 # Run tests
-make dev-test
+make podman-test
 
-# Stop cluster
-make dev-down
+# Stop services
+make podman-down
 ```
 
-The API will be available after you set up a host entry for `voiceresumeapp.local` pointing to the microk8s service IP.
+Use `make dev-up` when you need the microk8s environment for deployment validation. The API is available at `http://localhost:8000` with Podman Compose, or at `voiceresumeapp.local` after you add a microk8s host entry.
 
 ## Project Structure
 
@@ -62,7 +62,7 @@ voiceresumeai/
 │   │   ├── requirements.txt
 │   │   └── tests/
 │   └── k8s-manifests/        # Kubernetes YAMLs
-├── Dockerfile                 # Multi-stage Docker build
+├── Dockerfile                 # Multi-stage OCI image build
 ├── Makefile                   # Development commands
 ├── pyproject.toml            # Root Python project config
 └── README.md                 # This file
@@ -75,10 +75,10 @@ voiceresumeai/
 - FastAPI app scaffolding
 - Shared auth package
 - Shared database models
-- Docker container build
+- Podman-compatible container build
 - Kubernetes manifests (K3s / DOKS)
 - GitHub Actions CI/CD pipeline
-- Local development setup (Makefile + k3d)
+- Local development setup (Makefile + Podman Compose / microk8s)
 
 ### Phase 2: Auth (In Progress)
 - Sign up endpoint (email + password)
@@ -105,7 +105,12 @@ voiceresumeai/
 
 ## Deployment
 
-### Local (K3s)
+### Local (Podman Compose)
+```bash
+make podman-up
+```
+
+### Local Kubernetes (microk8s)
 ```bash
 make dev-up
 ```

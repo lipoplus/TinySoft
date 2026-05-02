@@ -9,14 +9,14 @@
 ### Changes Made
 
 #### 1. Makefile Updates
-- Replaced `docker compose` → `podman-compose` (all 5 compose commands)
+- Added Podman-first `make podman-*` targets and kept `make docker-*` aliases for compatibility
 - Replaced `docker build` → `podman build` and `docker save` → `podman save`
 - Renamed `DOCKER_IMAGE` → `CONTAINER_IMAGE` variable
 - Updated help text and comments to reference Podman
 
 #### 2. Setup Script Updates (`scripts/setup-local-dev.sh`)
 - Changed Docker installation check → Podman check
-- Added podman-compose verification
+- Added support for both `podman compose` and `podman-compose`
 - Updated daemon/socket checks for rootless mode compatibility
 - Replaced all docker commands with podman equivalents
 
@@ -41,9 +41,9 @@
 **Option 1: Fast Iteration with Podman (Recommended)**
 ```bash
 make setup           # Choose Podman Compose
-make docker-up       # Services running in ~30s
-make docker-logs     # Watch changes
-make docker-test     # Run tests
+make podman-up       # Services running in ~30s
+make podman-logs     # Watch changes
+make podman-test     # Run tests
 ```
 
 **Option 2: Production-Like Testing**
@@ -54,7 +54,7 @@ make dev-logs       # Tail K8s logs
 ```
 
 ### Architecture Decision
-- **Docker Compose** for 90% of development (fast feedback loop)
+- **Podman Compose** for 90% of development (fast feedback loop)
 - **K8s (microk8s)** available for deployment validation
 - Both options share same codebase and configuration
 - Clear documentation on when to use each
@@ -69,7 +69,7 @@ make dev-logs       # Tail K8s logs
 - [x] Troubleshooting guide
 
 ### Testing Done
-- ✅ Docker Compose configuration validated (syntax correct)
+- ✅ Podman compose configuration validated via Makefile/script wiring
 - ✅ Dockerfile multi-stage build tested
 - ✅ Setup script created and executable
 - ✅ All Makefile targets added

@@ -25,7 +25,7 @@ Then visit:
 
 ```bash
 # 1. Make sure services are running
-make docker-up
+make podman-up
 
 # 2. Edit code in apps/voiceresumeapp/ (auto-reloads)
 
@@ -35,13 +35,13 @@ curl -X POST http://localhost:8000/auth/signup \
   -d '{"email":"test@example.com","password":"test123"}'
 
 # 4. View logs to debug
-make docker-logs
+make podman-logs
 ```
 
 ### Run Tests
 
 ```bash
-make docker-test
+make podman-test
 
 # Or run specific test
 podman-compose -f docker-compose.local.yml exec voiceresumeapp \
@@ -90,11 +90,11 @@ podman-compose -f docker-compose.local.yml exec voiceresumeapp \
 
 ```bash
 # Stop all services and remove data
-make docker-down
+make podman-down
 podman-compose -f docker-compose.local.yml down -v
 
 # Then restart
-make docker-up
+make podman-up
 ```
 
 ---
@@ -108,7 +108,7 @@ lsof -i :8000    # Find what's using port 8000
 kill -9 <PID>    # Kill it
 
 # Then restart
-make docker-down && make docker-up
+make podman-down && make podman-up
 ```
 
 ### Database Connection Failed
@@ -181,7 +181,7 @@ Optional:
 - **Setup issues:** See SETUP.md
 - **API docs:** http://localhost:8000/docs (when running)
 - **Database issues:** Check PgAdmin UI at http://localhost:5050
-- **Logs:** `make docker-logs`
+- **Logs:** `make podman-logs`
 - **Code questions:** See README.md architecture section
 
 ---
@@ -190,9 +190,9 @@ Optional:
 
 - [ ] Podman and podman-compose installed
 - [ ] `.env.local` created (with optional OPENAI_API_KEY)
-- [ ] Services running (`make docker-up`)
+- [ ] Services running (`make podman-up`)
 - [ ] API responding (`curl http://localhost:8000/health`)
 - [ ] Database accessible (check PgAdmin)
-- [ ] Tests passing (`make docker-test`)
+- [ ] Tests passing (`make podman-test`)
 
 ✅ Ready to code!
