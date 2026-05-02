@@ -1,17 +1,20 @@
 import os
 from contextlib import asynccontextmanager
+import shutil
+from pathlib import Path
 
-from fastapi import FastAPI, Depends, HTTPException, Cookie, Response
+from fastapi import FastAPI, Depends, HTTPException, Cookie, Response, UploadFile, File
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from datetime import datetime, timedelta, timezone
-from uuid import UUID
+from uuid import UUID, uuid4
+import openai
 
 import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'packages'))
 
-from platform_db import User, get_db, init_db
+from platform_db import User, get_db, init_db, VoiceMemo, Transcription, GeneratedResume
 from platform_db.models import PasswordResetToken
 from platform_auth import hash_password, verify_password, create_session_token, verify_token, hash_token, generate_reset_token, get_reset_token_expiry
 from platform_auth.email import send_email, generate_reset_email
@@ -41,8 +44,43 @@ class PasswordResetConfirm(BaseModel):
     new_password: str
 
 
+class MemoUploadResponse(BaseModel):
+    id: str
+    file_name: str
+    status: str
+    created_at: datetime
+
+
+class TranscriptionResponse(BaseModel):
+    id: str
+    memo_id: str
+    text: str
+    language: str | None
+    created_at: datetime
+
+
+class ResumeResponse(BaseModel):
+    id: str
+    memo_id: str
+    resume_text: str
+    created_at: datetime
+
+
+class MemoDetailResponse(BaseModel):
+    id: str
+    file_name: str
+    status: str
+    created_at: datetime
+    transcription: TranscriptionResponse | None
+    resume: ResumeResponse | None
+
+
+MEMOS_DIR = Path("/tmp/voice_memos")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    MEMOS_DIR.mkdir(parents=True, exist_ok=True)
     init_db()
     yield
 
@@ -55,6 +93,11 @@ app = FastAPI(
 )
 
 SECRET_KEY = os.getenv("JWT_SECRET", "dev-secret-key-change-in-production")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+openai_client = openai.OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
+
+ALLOWED_AUDIO_FORMATS = {"audio/mpeg", "audio/wav", "audio/webm", "audio/ogg"}
+MAX_FILE_SIZE = 25 * 1024 * 1024
 
 
 def get_current_user(session_token: str | None = Cookie(None), db: Session = Depends(get_db)) -> User | None:
@@ -234,6 +277,236 @@ async def delete_session(session_id: UUID, current_user: User = Depends(get_curr
     db.commit()
 
     return {"message": "Session deleted"}
+
+
+@app.post("/memos/upload", response_model=MemoUploadResponse)
+async def upload_memo(file: UploadFile = File(...), current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    if file.content_type not in ALLOWED_AUDIO_FORMATS:
+        raise HTTPException(status_code=400, detail=f"Invalid audio format. Allowed: {', '.join(ALLOWED_AUDIO_FORMATS)}")
+
+    content = await file.read()
+    if len(content) > MAX_FILE_SIZE:
+        raise HTTPException(status_code=400, detail=f"File too large. Max size: {MAX_FILE_SIZE / 1024 / 1024:.0f}MB")
+
+    memo = VoiceMemo(
+        user_id=current_user.id,
+        file_name=file.filename,
+        file_path=str(MEMOS_DIR / f"{uuid4().hex}_{file.filename}"),
+        status="uploaded"
+    )
+    db.add(memo)
+    db.commit()
+    db.refresh(memo)
+
+    file_path = Path(memo.file_path)
+    file_path.write_bytes(content)
+
+    return MemoUploadResponse(
+        id=str(memo.id),
+        file_name=memo.file_name,
+        status=memo.status,
+        created_at=memo.created_at
+    )
+
+
+@app.post("/memos/{memo_id}/transcribe", response_model=TranscriptionResponse)
+async def transcribe_memo(memo_id: UUID, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    if not openai_client:
+        raise HTTPException(status_code=500, detail="OpenAI API key not configured")
+
+    memo = db.query(VoiceMemo).filter(
+        VoiceMemo.id == memo_id,
+        VoiceMemo.user_id == current_user.id
+    ).first()
+
+    if not memo:
+        raise HTTPException(status_code=404, detail="Memo not found")
+
+    existing_transcription = db.query(Transcription).filter(
+        Transcription.memo_id == memo_id
+    ).first()
+
+    if existing_transcription:
+        return TranscriptionResponse(
+            id=str(existing_transcription.id),
+            memo_id=str(existing_transcription.memo_id),
+            text=existing_transcription.text,
+            language=existing_transcription.language,
+            created_at=existing_transcription.created_at
+        )
+
+    try:
+        with open(memo.file_path, "rb") as audio_file:
+            transcript = openai_client.audio.transcriptions.create(
+                model="whisper-1",
+                file=audio_file,
+                language="en"
+            )
+
+        transcription = Transcription(
+            memo_id=memo_id,
+            text=transcript.text,
+            language="en"
+        )
+        db.add(transcription)
+        memo.status = "transcribed"
+        db.commit()
+        db.refresh(transcription)
+
+        return TranscriptionResponse(
+            id=str(transcription.id),
+            memo_id=str(transcription.memo_id),
+            text=transcription.text,
+            language=transcription.language,
+            created_at=transcription.created_at
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Transcription failed: {str(e)}")
+
+
+@app.post("/memos/{memo_id}/generate-resume", response_model=ResumeResponse)
+async def generate_resume(memo_id: UUID, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    if not openai_client:
+        raise HTTPException(status_code=500, detail="OpenAI API key not configured")
+
+    memo = db.query(VoiceMemo).filter(
+        VoiceMemo.id == memo_id,
+        VoiceMemo.user_id == current_user.id
+    ).first()
+
+    if not memo:
+        raise HTTPException(status_code=404, detail="Memo not found")
+
+    transcription = db.query(Transcription).filter(
+        Transcription.memo_id == memo_id
+    ).first()
+
+    if not transcription:
+        raise HTTPException(status_code=400, detail="Memo must be transcribed first")
+
+    existing_resume = db.query(GeneratedResume).filter(
+        GeneratedResume.memo_id == memo_id
+    ).first()
+
+    if existing_resume:
+        return ResumeResponse(
+            id=str(existing_resume.id),
+            memo_id=str(existing_resume.memo_id),
+            resume_text=existing_resume.resume_text,
+            created_at=existing_resume.created_at
+        )
+
+    try:
+        response = openai_client.chat.completions.create(
+            model="gpt-4",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are an expert resume writer. Convert the provided voice memo transcript into a professional resume. Format it as a well-structured resume with sections for contact info, summary, experience, skills, and education if mentioned."
+                },
+                {
+                    "role": "user",
+                    "content": f"Please convert this voice memo transcript into a professional resume:\n\n{transcription.text}"
+                }
+            ],
+            temperature=0.7,
+            max_tokens=1000
+        )
+
+        resume_text = response.choices[0].message.content
+
+        resume = GeneratedResume(
+            memo_id=memo_id,
+            resume_text=resume_text
+        )
+        db.add(resume)
+        memo.status = "completed"
+        db.commit()
+        db.refresh(resume)
+
+        return ResumeResponse(
+            id=str(resume.id),
+            memo_id=str(resume.memo_id),
+            resume_text=resume.resume_text,
+            created_at=resume.created_at
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Resume generation failed: {str(e)}")
+
+
+@app.get("/memos")
+async def list_memos(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    memos = db.query(VoiceMemo).filter(
+        VoiceMemo.user_id == current_user.id
+    ).order_by(VoiceMemo.created_at.desc()).all()
+
+    return {
+        "memos": [
+            {
+                "id": str(memo.id),
+                "file_name": memo.file_name,
+                "status": memo.status,
+                "created_at": memo.created_at,
+                "has_transcription": memo.transcription is not None,
+                "has_resume": memo.resume is not None
+            }
+            for memo in memos
+        ]
+    }
+
+
+@app.get("/memos/{memo_id}", response_model=MemoDetailResponse)
+async def get_memo_detail(memo_id: UUID, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    memo = db.query(VoiceMemo).filter(
+        VoiceMemo.id == memo_id,
+        VoiceMemo.user_id == current_user.id
+    ).first()
+
+    if not memo:
+        raise HTTPException(status_code=404, detail="Memo not found")
+
+    transcription_data = None
+    if memo.transcription:
+        transcription_data = TranscriptionResponse(
+            id=str(memo.transcription.id),
+            memo_id=str(memo.transcription.memo_id),
+            text=memo.transcription.text,
+            language=memo.transcription.language,
+            created_at=memo.transcription.created_at
+        )
+
+    resume_data = None
+    if memo.resume:
+        resume_data = ResumeResponse(
+            id=str(memo.resume.id),
+            memo_id=str(memo.resume.memo_id),
+            resume_text=memo.resume.resume_text,
+            created_at=memo.resume.created_at
+        )
+
+    return MemoDetailResponse(
+        id=str(memo.id),
+        file_name=memo.file_name,
+        status=memo.status,
+        created_at=memo.created_at,
+        transcription=transcription_data,
+        resume=resume_data
+    )
 
 
 if __name__ == "__main__":
