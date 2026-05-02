@@ -13,10 +13,24 @@ spec:
       labels:
         app: voiceresumeapp
     spec:
+      initContainers:
+      - name: migrations
+        image: voiceresumeapp:latest
+        imagePullPolicy: Never
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            configMapKeyRef:
+              name: voiceresumeapp-config
+              key: DATABASE_URL
+        command:
+        - sh
+        - -c
+        - "alembic upgrade head || true"
       containers:
       - name: voiceresumeapp
-        image: ghcr.io/voiceresumeai/voiceresumeapp:latest
-        imagePullPolicy: Always
+        image: voiceresumeapp:latest
+        imagePullPolicy: Never
         ports:
         - containerPort: 8000
           name: http
@@ -25,6 +39,17 @@ spec:
             name: voiceresumeapp-config
         - secretRef:
             name: voiceresumeapp-secrets
+        env:
+        - name: S3_ENDPOINT
+          value: "http://minio-svc:9000"
+        - name: S3_BUCKET
+          value: "voiceresumeai"
+        - name: S3_ACCESS_KEY
+          value: "minioadmin"
+        - name: S3_SECRET_KEY
+          value: "minioadmin"
+        - name: S3_REGION
+          value: "us-east-1"
         livenessProbe:
           httpGet:
             path: /health
@@ -40,7 +65,8 @@ spec:
         resources:
           requests:
             cpu: 100m
-            memory: 128Mi
+            memory: 256Mi
           limits:
             cpu: 500m
             memory: 512Mi
+      restartPolicy: Always
