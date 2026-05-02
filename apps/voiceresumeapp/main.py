@@ -1,23 +1,45 @@
 import os
-from contextlib import asynccontextmanager
-import shutil
-from pathlib import Path
-
-from fastapi import FastAPI, Depends, HTTPException, Cookie, Response, UploadFile, File
-from fastapi.responses import JSONResponse
-from sqlalchemy.orm import Session
-from pydantic import BaseModel
-from datetime import datetime, timedelta, timezone
-from uuid import UUID, uuid4
-import openai
-
 import sys
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'packages'))
+from contextlib import asynccontextmanager
+from datetime import datetime, timezone
+from pathlib import Path
+from uuid import UUID, uuid4
 
-from platform_db import User, get_db, init_db, VoiceMemo, Transcription, GeneratedResume
+import openai
+from fastapi import (
+    Cookie,
+    Depends,
+    FastAPI,
+    File,
+    HTTPException,
+    Response,
+    UploadFile,
+)
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "packages"))
+
+from platform_auth import (
+    create_session_token,
+    generate_reset_token,
+    get_reset_token_expiry,
+    hash_password,
+    hash_token,
+    verify_password,
+    verify_token,
+)
+from platform_auth.email import generate_reset_email, send_email
+from platform_db import (
+    GeneratedResume,
+    Transcription,
+    User,
+    VoiceMemo,
+    get_db,
+    init_db,
+)
 from platform_db.models import PasswordResetToken
-from platform_auth import hash_password, verify_password, create_session_token, verify_token, hash_token, generate_reset_token, get_reset_token_expiry
-from platform_auth.email import send_email, generate_reset_email
 
 
 class SignUpRequest(BaseModel):
@@ -100,7 +122,9 @@ ALLOWED_AUDIO_FORMATS = {"audio/mpeg", "audio/wav", "audio/webm", "audio/ogg"}
 MAX_FILE_SIZE = 25 * 1024 * 1024
 
 
-def get_current_user(session_token: str | None = Cookie(None), db: Session = Depends(get_db)) -> User | None:
+def get_current_user(
+    session_token: str | None = Cookie(None), db: Session = Depends(get_db)
+) -> User | None:
     if not session_token:
         return None
 
@@ -113,6 +137,7 @@ def get_current_user(session_token: str | None = Cookie(None), db: Session = Dep
         return None
 
     from platform_db.database import SessionLocal
+
     session = SessionLocal()
     try:
         user = session.query(User).filter(User.id == user_id).first()
@@ -177,6 +202,7 @@ async def logout(response: Response):
 @app.post("/auth/password-reset-request")
 async def request_password_reset(req: PasswordResetRequest, db: Session = Depends(get_db)):
     import asyncio
+
     user = db.query(User).filter(User.email == req.email).first()
     if not user:
         return {"message": "If email exists, a reset link will be sent"}
@@ -184,9 +210,9 @@ async def request_password_reset(req: PasswordResetRequest, db: Session = Depend
     reset_token = generate_reset_token()
     token_hash = hash_token(reset_token)
 
-    existing_reset = db.query(PasswordResetToken).filter(
-        PasswordResetToken.user_id == user.id
-    ).first()
+    existing_reset = (
+        db.query(PasswordResetToken).filter(PasswordResetToken.user_id == user.id).first()
+    )
     if existing_reset:
         db.delete(existing_reset)
 
@@ -198,7 +224,9 @@ async def request_password_reset(req: PasswordResetRequest, db: Session = Depend
     db.add(password_reset)
     db.commit()
 
-    reset_url = f"{os.getenv('FRONTEND_URL', 'http://localhost:3000')}/reset-password?token={reset_token}"
+    reset_url = (
+        f"{os.getenv('FRONTEND_URL', 'http://localhost:3000')}/reset-password?token={reset_token}"
+    )
     subject, body = generate_reset_email(user.email, reset_url)
     asyncio.create_task(send_email(user.email, subject, body))
 
@@ -209,9 +237,9 @@ async def request_password_reset(req: PasswordResetRequest, db: Session = Depend
 async def confirm_password_reset(req: PasswordResetConfirm, db: Session = Depends(get_db)):
     token_hash = hash_token(req.token)
 
-    reset_token = db.query(PasswordResetToken).filter(
-        PasswordResetToken.token_hash == token_hash
-    ).first()
+    reset_token = (
+        db.query(PasswordResetToken).filter(PasswordResetToken.token_hash == token_hash).first()
+    )
 
     if not reset_token or reset_token.expires_at < datetime.now(timezone.utc):
         raise HTTPException(status_code=400, detail="Invalid or expired reset token")
@@ -230,22 +258,24 @@ async def confirm_password_reset(req: PasswordResetConfirm, db: Session = Depend
 @app.delete("/auth/sessions")
 async def cleanup_expired_sessions(db: Session = Depends(get_db)):
     from platform_db.models import Session as SessionModel
-    expired_sessions = db.query(SessionModel).filter(
-        SessionModel.expires_at < datetime.now(timezone.utc)
-    ).delete()
+
+    expired_sessions = (
+        db.query(SessionModel).filter(SessionModel.expires_at < datetime.now(timezone.utc)).delete()
+    )
     db.commit()
     return {"deleted_sessions": expired_sessions}
 
 
 @app.get("/auth/sessions")
-async def list_sessions(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def list_sessions(
+    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
+):
     if not current_user:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
     from platform_db.models import Session as SessionModel
-    sessions = db.query(SessionModel).filter(
-        SessionModel.user_id == current_user.id
-    ).all()
+
+    sessions = db.query(SessionModel).filter(SessionModel.user_id == current_user.id).all()
 
     return {
         "sessions": [
@@ -260,15 +290,22 @@ async def list_sessions(current_user: User = Depends(get_current_user), db: Sess
 
 
 @app.delete("/auth/sessions/{session_id}")
-async def delete_session(session_id: UUID, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def delete_session(
+    session_id: UUID, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
+):
     if not current_user:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
     from platform_db.models import Session as SessionModel
-    session = db.query(SessionModel).filter(
-        SessionModel.id == session_id,
-        SessionModel.user_id == current_user.id,
-    ).first()
+
+    session = (
+        db.query(SessionModel)
+        .filter(
+            SessionModel.id == session_id,
+            SessionModel.user_id == current_user.id,
+        )
+        .first()
+    )
 
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -280,22 +317,31 @@ async def delete_session(session_id: UUID, current_user: User = Depends(get_curr
 
 
 @app.post("/memos/upload", response_model=MemoUploadResponse)
-async def upload_memo(file: UploadFile = File(...), current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def upload_memo(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     if not current_user:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
     if file.content_type not in ALLOWED_AUDIO_FORMATS:
-        raise HTTPException(status_code=400, detail=f"Invalid audio format. Allowed: {', '.join(ALLOWED_AUDIO_FORMATS)}")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid audio format. Allowed: {', '.join(ALLOWED_AUDIO_FORMATS)}",
+        )
 
     content = await file.read()
     if len(content) > MAX_FILE_SIZE:
-        raise HTTPException(status_code=400, detail=f"File too large. Max size: {MAX_FILE_SIZE / 1024 / 1024:.0f}MB")
+        raise HTTPException(
+            status_code=400, detail=f"File too large. Max size: {MAX_FILE_SIZE / 1024 / 1024:.0f}MB"
+        )
 
     memo = VoiceMemo(
         user_id=current_user.id,
         file_name=file.filename,
         file_path=str(MEMOS_DIR / f"{uuid4().hex}_{file.filename}"),
-        status="uploaded"
+        status="uploaded",
     )
     db.add(memo)
     db.commit()
@@ -305,32 +351,32 @@ async def upload_memo(file: UploadFile = File(...), current_user: User = Depends
     file_path.write_bytes(content)
 
     return MemoUploadResponse(
-        id=str(memo.id),
-        file_name=memo.file_name,
-        status=memo.status,
-        created_at=memo.created_at
+        id=str(memo.id), file_name=memo.file_name, status=memo.status, created_at=memo.created_at
     )
 
 
 @app.post("/memos/{memo_id}/transcribe", response_model=TranscriptionResponse)
-async def transcribe_memo(memo_id: UUID, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def transcribe_memo(
+    memo_id: UUID, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
+):
     if not current_user:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
     if not openai_client:
         raise HTTPException(status_code=500, detail="OpenAI API key not configured")
 
-    memo = db.query(VoiceMemo).filter(
-        VoiceMemo.id == memo_id,
-        VoiceMemo.user_id == current_user.id
-    ).first()
+    memo = (
+        db.query(VoiceMemo)
+        .filter(VoiceMemo.id == memo_id, VoiceMemo.user_id == current_user.id)
+        .first()
+    )
 
     if not memo:
         raise HTTPException(status_code=404, detail="Memo not found")
 
-    existing_transcription = db.query(Transcription).filter(
-        Transcription.memo_id == memo_id
-    ).first()
+    existing_transcription = (
+        db.query(Transcription).filter(Transcription.memo_id == memo_id).first()
+    )
 
     if existing_transcription:
         return TranscriptionResponse(
@@ -338,22 +384,16 @@ async def transcribe_memo(memo_id: UUID, current_user: User = Depends(get_curren
             memo_id=str(existing_transcription.memo_id),
             text=existing_transcription.text,
             language=existing_transcription.language,
-            created_at=existing_transcription.created_at
+            created_at=existing_transcription.created_at,
         )
 
     try:
         with open(memo.file_path, "rb") as audio_file:
             transcript = openai_client.audio.transcriptions.create(
-                model="whisper-1",
-                file=audio_file,
-                language="en"
+                model="whisper-1", file=audio_file, language="en"
             )
 
-        transcription = Transcription(
-            memo_id=memo_id,
-            text=transcript.text,
-            language="en"
-        )
+        transcription = Transcription(memo_id=memo_id, text=transcript.text, language="en")
         db.add(transcription)
         memo.status = "transcribed"
         db.commit()
@@ -364,45 +404,44 @@ async def transcribe_memo(memo_id: UUID, current_user: User = Depends(get_curren
             memo_id=str(transcription.memo_id),
             text=transcription.text,
             language=transcription.language,
-            created_at=transcription.created_at
+            created_at=transcription.created_at,
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Transcription failed: {str(e)}")
 
 
 @app.post("/memos/{memo_id}/generate-resume", response_model=ResumeResponse)
-async def generate_resume(memo_id: UUID, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def generate_resume(
+    memo_id: UUID, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
+):
     if not current_user:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
     if not openai_client:
         raise HTTPException(status_code=500, detail="OpenAI API key not configured")
 
-    memo = db.query(VoiceMemo).filter(
-        VoiceMemo.id == memo_id,
-        VoiceMemo.user_id == current_user.id
-    ).first()
+    memo = (
+        db.query(VoiceMemo)
+        .filter(VoiceMemo.id == memo_id, VoiceMemo.user_id == current_user.id)
+        .first()
+    )
 
     if not memo:
         raise HTTPException(status_code=404, detail="Memo not found")
 
-    transcription = db.query(Transcription).filter(
-        Transcription.memo_id == memo_id
-    ).first()
+    transcription = db.query(Transcription).filter(Transcription.memo_id == memo_id).first()
 
     if not transcription:
         raise HTTPException(status_code=400, detail="Memo must be transcribed first")
 
-    existing_resume = db.query(GeneratedResume).filter(
-        GeneratedResume.memo_id == memo_id
-    ).first()
+    existing_resume = db.query(GeneratedResume).filter(GeneratedResume.memo_id == memo_id).first()
 
     if existing_resume:
         return ResumeResponse(
             id=str(existing_resume.id),
             memo_id=str(existing_resume.memo_id),
             resume_text=existing_resume.resume_text,
-            created_at=existing_resume.created_at
+            created_at=existing_resume.created_at,
         )
 
     try:
@@ -411,23 +450,20 @@ async def generate_resume(memo_id: UUID, current_user: User = Depends(get_curren
             messages=[
                 {
                     "role": "system",
-                    "content": "You are an expert resume writer. Convert the provided voice memo transcript into a professional resume. Format it as a well-structured resume with sections for contact info, summary, experience, skills, and education if mentioned."
+                    "content": "You are an expert resume writer. Convert the provided voice memo transcript into a professional resume. Format it as a well-structured resume with sections for contact info, summary, experience, skills, and education if mentioned.",
                 },
                 {
                     "role": "user",
-                    "content": f"Please convert this voice memo transcript into a professional resume:\n\n{transcription.text}"
-                }
+                    "content": f"Please convert this voice memo transcript into a professional resume:\n\n{transcription.text}",
+                },
             ],
             temperature=0.7,
-            max_tokens=1000
+            max_tokens=1000,
         )
 
         resume_text = response.choices[0].message.content
 
-        resume = GeneratedResume(
-            memo_id=memo_id,
-            resume_text=resume_text
-        )
+        resume = GeneratedResume(memo_id=memo_id, resume_text=resume_text)
         db.add(resume)
         memo.status = "completed"
         db.commit()
@@ -437,7 +473,7 @@ async def generate_resume(memo_id: UUID, current_user: User = Depends(get_curren
             id=str(resume.id),
             memo_id=str(resume.memo_id),
             resume_text=resume.resume_text,
-            created_at=resume.created_at
+            created_at=resume.created_at,
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Resume generation failed: {str(e)}")
@@ -448,9 +484,12 @@ async def list_memos(current_user: User = Depends(get_current_user), db: Session
     if not current_user:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
-    memos = db.query(VoiceMemo).filter(
-        VoiceMemo.user_id == current_user.id
-    ).order_by(VoiceMemo.created_at.desc()).all()
+    memos = (
+        db.query(VoiceMemo)
+        .filter(VoiceMemo.user_id == current_user.id)
+        .order_by(VoiceMemo.created_at.desc())
+        .all()
+    )
 
     return {
         "memos": [
@@ -460,7 +499,7 @@ async def list_memos(current_user: User = Depends(get_current_user), db: Session
                 "status": memo.status,
                 "created_at": memo.created_at,
                 "has_transcription": memo.transcription is not None,
-                "has_resume": memo.resume is not None
+                "has_resume": memo.resume is not None,
             }
             for memo in memos
         ]
@@ -468,14 +507,17 @@ async def list_memos(current_user: User = Depends(get_current_user), db: Session
 
 
 @app.get("/memos/{memo_id}", response_model=MemoDetailResponse)
-async def get_memo_detail(memo_id: UUID, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def get_memo_detail(
+    memo_id: UUID, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
+):
     if not current_user:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
-    memo = db.query(VoiceMemo).filter(
-        VoiceMemo.id == memo_id,
-        VoiceMemo.user_id == current_user.id
-    ).first()
+    memo = (
+        db.query(VoiceMemo)
+        .filter(VoiceMemo.id == memo_id, VoiceMemo.user_id == current_user.id)
+        .first()
+    )
 
     if not memo:
         raise HTTPException(status_code=404, detail="Memo not found")
@@ -487,7 +529,7 @@ async def get_memo_detail(memo_id: UUID, current_user: User = Depends(get_curren
             memo_id=str(memo.transcription.memo_id),
             text=memo.transcription.text,
             language=memo.transcription.language,
-            created_at=memo.transcription.created_at
+            created_at=memo.transcription.created_at,
         )
 
     resume_data = None
@@ -496,7 +538,7 @@ async def get_memo_detail(memo_id: UUID, current_user: User = Depends(get_curren
             id=str(memo.resume.id),
             memo_id=str(memo.resume.memo_id),
             resume_text=memo.resume.resume_text,
-            created_at=memo.resume.created_at
+            created_at=memo.resume.created_at,
         )
 
     return MemoDetailResponse(
@@ -505,10 +547,11 @@ async def get_memo_detail(memo_id: UUID, current_user: User = Depends(get_curren
         status=memo.status,
         created_at=memo.created_at,
         transcription=transcription_data,
-        resume=resume_data
+        resume=resume_data,
     )
 
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)

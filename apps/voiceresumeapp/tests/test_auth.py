@@ -1,6 +1,3 @@
-import pytest
-
-
 def test_health_check(client):
     response = client.get("/health")
     assert response.status_code == 200
@@ -94,14 +91,12 @@ def test_password_reset_request_nonexistent_email(client):
 
 
 def test_list_sessions(client, db):
-    from sqlalchemy import text
-    user_resp = client.post(
+    client.post(
         "/auth/signup",
         json={"email": "test@example.com", "password": "secure-password"},
     )
-    user_id = user_resp.json()["id"]
 
-    login_resp = client.post(
+    client.post(
         "/auth/login",
         json={"email": "test@example.com", "password": "secure-password"},
     )
@@ -113,9 +108,10 @@ def test_list_sessions(client, db):
 
 
 def test_cleanup_expired_sessions(client, db):
-    from datetime import datetime, timezone, timedelta
-    from platform_db.models import Session as SessionModel, User
-    from sqlalchemy import text
+    from datetime import datetime, timedelta, timezone
+
+    from platform_db.models import Session as SessionModel
+    from platform_db.models import User
 
     client.post(
         "/auth/signup",
