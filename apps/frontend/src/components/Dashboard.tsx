@@ -1,10 +1,11 @@
 import React, { useEffect, useCallback, useState } from 'react'
+import axios from 'axios'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { memos } from '../api/memos'
 import { VoiceRecorder } from './VoiceRecorder'
 import { ResumeEditor } from './ResumeEditor'
-import type { MemoDetailResponse } from '../api/memos'
+import type { MemoDetailResponse, MemoListItem } from '../api/memos'
 
 interface UploadingMemo {
   name: string
@@ -12,9 +13,11 @@ interface UploadingMemo {
 }
 
 export const Dashboard: React.FC = () => {
-  const [memoList, setMemoList] = useState<MemoDetailResponse[]>([])
+  const [memoList, setMemoList] = useState<MemoListItem[]>([])
   const [selectedMemo, setSelectedMemo] = useState<MemoDetailResponse | null>(null)
+  const [selectedMemoId, setSelectedMemoId] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [isMemoDetailLoading, setIsMemoDetailLoading] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
   const [uploadingMemo, setUploadingMemo] = useState<UploadingMemo | null>(null)
   const [isDownloading, setIsDownloading] = useState(false)
@@ -22,21 +25,68 @@ export const Dashboard: React.FC = () => {
   const { logout, email } = useAuth()
   const navigate = useNavigate()
 
+  const getErrorMessage = (fallback: string, err: unknown) => {
+    if (axios.isAxiosError(err)) {
+      const detail = err.response?.data?.detail
+      if (typeof detail === 'string') {
+        return detail
+      }
+
+      if (err.response?.status === 401) {
+        return 'Your session expired. Please sign in again.'
+      }
+    }
+
+    return fallback
+  }
+
+  const loadMemoDetail = useCallback(async (memoId: string) => {
+    try {
+      setIsMemoDetailLoading(true)
+      const memo = await memos.getMemo(memoId)
+      setSelectedMemo(memo)
+    } catch (err) {
+      setError(getErrorMessage('Failed to load memo details', err))
+
+      if (axios.isAxiosError(err) && err.response?.status === 401) {
+        await logout()
+        navigate('/login')
+      }
+    } finally {
+      setIsMemoDetailLoading(false)
+    }
+  }, [logout, navigate])
+
   const fetchMemos = useCallback(async () => {
     try {
       setIsLoading(true)
-      const data = await memos.listMemos()
-      setMemoList(data)
-      if (data.length > 0) {
-        setSelectedMemo(data[0])
+      const list = await memos.listMemos()
+      setMemoList(list)
+
+      if (list.length > 0) {
+        const nextId = selectedMemoId && list.some((memo) => memo.id === selectedMemoId)
+          ? selectedMemoId
+          : list[0].id
+
+        setSelectedMemoId(nextId)
+        await loadMemoDetail(nextId)
+      } else {
+        setSelectedMemo(null)
+        setSelectedMemoId(null)
       }
     } catch (err) {
-      setError('Failed to load memos')
+      setError(getErrorMessage('Failed to load memos', err))
+
+      if (axios.isAxiosError(err) && err.response?.status === 401) {
+        await logout()
+        navigate('/login')
+      }
+
       console.error(err)
     } finally {
       setIsLoading(false)
     }
-  }, [])
+  }, [loadMemoDetail, logout, navigate, selectedMemoId])
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -61,15 +111,33 @@ export const Dashboard: React.FC = () => {
         resume: null,
       }
 
-      setMemoList((prev) => [newMemo, ...prev])
+      setMemoList((prev) => [
+        {
+          id: newMemo.id,
+          file_name: newMemo.file_name,
+          status: newMemo.status,
+          created_at: newMemo.created_at,
+          has_transcription: false,
+          has_resume: false,
+        },
+        ...prev,
+      ])
+      setSelectedMemoId(newMemo.id)
       setSelectedMemo(newMemo)
       setError(null)
 
-      setTimeout(() => fetchMemos(), 2000)
+      setTimeout(() => {
+        void fetchMemos()
+      }, 2000)
     } catch (err) {
-      setError('Failed to upload memo')
+      setError(getErrorMessage('Failed to upload memo', err))
       console.error(err)
       setUploadingMemo(null)
+
+      if (axios.isAxiosError(err) && err.response?.status === 401) {
+        await logout()
+        navigate('/login')
+      }
     } finally {
       setIsUploading(false)
     }
@@ -91,8 +159,13 @@ export const Dashboard: React.FC = () => {
       document.body.removeChild(link)
       window.URL.revokeObjectURL(url)
     } catch (err) {
-      setError('Failed to download resume')
+      setError(getErrorMessage('Failed to download resume', err))
       console.error(err)
+
+      if (axios.isAxiosError(err) && err.response?.status === 401) {
+        await logout()
+        navigate('/login')
+      }
     } finally {
       setIsDownloading(false)
     }
@@ -151,12 +224,18 @@ export const Dashboard: React.FC = () => {
             {selectedMemo && (
               <div>
                 <h2 className="text-xl font-bold text-gray-900 mb-4">Resume</h2>
-                <ResumeEditor
-                  initialText={selectedMemo.resume?.resume_text || ''}
-                  onSave={() => {}}
-                  onDownload={handleDownloadResume}
-                  isDownloading={isDownloading}
-                />
+                {isMemoDetailLoading ? (
+                  <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
+                    <p className="text-gray-600">Loading memo details...</p>
+                  </div>
+                ) : (
+                  <ResumeEditor
+                    initialText={selectedMemo.resume?.resume_text || ''}
+                    onSave={() => {}}
+                    onDownload={handleDownloadResume}
+                    isDownloading={isDownloading}
+                  />
+                )}
               </div>
             )}
           </div>
@@ -175,9 +254,12 @@ export const Dashboard: React.FC = () => {
                   memoList.map((memo) => (
                     <button
                       key={memo.id}
-                      onClick={() => setSelectedMemo(memo)}
+                      onClick={() => {
+                        setSelectedMemoId(memo.id)
+                        void loadMemoDetail(memo.id)
+                      }}
                       className={`w-full text-left p-3 rounded-lg border-2 transition-colors ${
-                        selectedMemo?.id === memo.id
+                        selectedMemoId === memo.id
                           ? 'border-purple-500 bg-purple-50'
                           : 'border-gray-200 bg-white hover:border-purple-300'
                       }`}
@@ -187,12 +269,12 @@ export const Dashboard: React.FC = () => {
                         {new Date(memo.created_at).toLocaleDateString()}
                       </p>
                       <div className="mt-2 flex gap-2">
-                        {memo.transcription && (
+                        {memo.has_transcription && (
                           <span className="inline-block px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded">
                             Transcribed
                           </span>
                         )}
-                        {memo.resume && (
+                        {memo.has_resume && (
                           <span className="inline-block px-2 py-1 bg-green-100 text-green-800 text-xs rounded">
                             Resume
                           </span>

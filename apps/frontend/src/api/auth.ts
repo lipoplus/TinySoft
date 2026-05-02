@@ -27,7 +27,7 @@ export const auth = {
     } catch (error) {
       if (axios.isAxiosError(error)) {
         const detail = error.response?.data?.detail
-        throw new Error(typeof detail === 'string' ? detail : 'Signup failed')
+        throw new Error(typeof detail === 'string' ? detail : 'Signup failed', { cause: error })
       }
       throw error
     }
@@ -43,7 +43,7 @@ export const auth = {
     } catch (error) {
       if (axios.isAxiosError(error)) {
         const detail = error.response?.data?.detail
-        throw new Error(typeof detail === 'string' ? detail : 'Login failed')
+        throw new Error(typeof detail === 'string' ? detail : 'Login failed', { cause: error })
       }
       throw error
     }
@@ -53,13 +53,24 @@ export const auth = {
     await client.post('/auth/logout')
   },
 
+  hasActiveSession: async (): Promise<boolean> => {
+    try {
+      await client.get('/auth/sessions')
+      return true
+    } catch {
+      return false
+    }
+  },
+
   resetPassword: async (email: string): Promise<{ message: string }> => {
-    const response = await client.post('/auth/reset-password', { email })
+    const response = await client.post('/auth/password-reset-request', {
+      email: email.trim().toLowerCase(),
+    })
     return response.data
   },
 
   confirmReset: async (token: string, newPassword: string): Promise<{ message: string }> => {
-    const response = await client.post('/auth/reset-password/confirm', {
+    const response = await client.post('/auth/password-reset-confirm', {
       token,
       new_password: newPassword,
     })

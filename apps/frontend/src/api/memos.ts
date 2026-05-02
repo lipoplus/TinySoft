@@ -31,6 +31,19 @@ export interface MemoDetailResponse {
   resume: ResumeResponse | null
 }
 
+export interface MemoListItem {
+  id: string
+  file_name: string
+  status: string
+  created_at: string
+  has_transcription: boolean
+  has_resume: boolean
+}
+
+interface MemoListResponse {
+  memos: MemoListItem[]
+}
+
 export const memos = {
   uploadMemo: async (file: File): Promise<MemoUploadResponse> => {
     const formData = new FormData()
@@ -49,9 +62,9 @@ export const memos = {
     return response.data
   },
 
-  listMemos: async (): Promise<MemoDetailResponse[]> => {
-    const response = await client.get('/memos')
-    return response.data
+  listMemos: async (): Promise<MemoListItem[]> => {
+    const response = await client.get<MemoListResponse>('/memos')
+    return response.data.memos
   },
 
   downloadResume: async (memoId: string): Promise<Blob> => {

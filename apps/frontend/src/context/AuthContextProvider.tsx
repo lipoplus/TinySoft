@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { auth } from '../api/auth'
 import { AuthContext } from './auth'
@@ -7,24 +7,39 @@ interface AuthProviderProps {
   children: ReactNode
 }
 
-function initializeAuth() {
-  const storedUserId = localStorage.getItem('user_id')
-  const storedEmail = localStorage.getItem('email')
-
-  return {
-    isAuthenticated: Boolean(storedUserId && storedEmail),
-    userId: storedUserId,
-    email: storedEmail,
-  }
-}
-
 export function AuthProvider({ children }: AuthProviderProps) {
-  const initialAuth = initializeAuth()
-  const [isAuthenticated, setIsAuthenticated] = useState(initialAuth.isAuthenticated)
-  const [userId, setUserId] = useState<string | null>(initialAuth.userId)
-  const [email, setEmail] = useState<string | null>(initialAuth.email)
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [userId, setUserId] = useState<string | null>(null)
+  const [email, setEmail] = useState<string | null>(null)
+  const [isInitializing, setIsInitializing] = useState(true)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const bootstrapAuth = async () => {
+      const storedUserId = localStorage.getItem('user_id')
+      const storedEmail = localStorage.getItem('email')
+
+      if (!storedUserId || !storedEmail) {
+        setIsInitializing(false)
+        return
+      }
+
+      const hasSession = await auth.hasActiveSession()
+      if (hasSession) {
+        setIsAuthenticated(true)
+        setUserId(storedUserId)
+        setEmail(storedEmail)
+      } else {
+        localStorage.removeItem('user_id')
+        localStorage.removeItem('email')
+      }
+
+      setIsInitializing(false)
+    }
+
+    void bootstrapAuth()
+  }, [])
 
   const login = async (emailInput: string, passwordInput: string) => {
     setIsLoading(true)
@@ -88,6 +103,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         isAuthenticated,
         userId,
         email,
+        isInitializing,
         login,
         signup,
         logout,
